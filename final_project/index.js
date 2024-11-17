@@ -1,17 +1,28 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const session = require('express-session')
+const session = require('express-session');
 const customer_routes = require('./router/auth_users.js').authenticated;
 const genl_routes = require('./router/general.js').general;
+const regd_users = require('./router/auth_users');
+const books = require('./router/booksdb.js');
 
 const app = express();
 
+// Secret key from environment variables or fallback to a default key
+const SECRET_KEY = process.env.SECRET_KEY || "default_secret_key";
+
 app.use(express.json());
 
-app.use("/customer",session({secret:"fingerprint_customer",resave: true, saveUninitialized: true}))
+// Session middleware for managing JWT tokens
+app.use("/customer", session({ 
+    secret: SECRET_KEY, 
+    resave: true, 
+    saveUninitialized: true, 
+    cookie: { maxAge: 3600000 } // Cookie expiry (1 hour)
+}));
 
+// Token verification middleware for protected routes
 app.use("/customer/auth/*", function auth(req, res, next) {
-    // Retrieve the token from the session
     const token = req.session.token;
 
     if (!token) {
@@ -19,19 +30,17 @@ app.use("/customer/auth/*", function auth(req, res, next) {
     }
 
     try {
-        // Verify the token
-        const decoded = jwt.verify(token, "fingerprint_customer");
-        req.user = decoded; // Attach the decoded token data (like user info) to the request
-        next(); // Proceed to the next middleware or route handler
+        const decoded = jwt.verify(token, SECRET_KEY);  // Verify using the same secret key
+        req.user = decoded; // Attach decoded user info to the request
+        next();  // Proceed to the next middleware/route handler
     } catch (err) {
-        res.status(403).json({ message: "Invalid token." });
+        return res.status(403).json({ message: "Invalid token." });
     }
 });
 
- 
-const PORT =5000;
+const PORT = 5000;
 
-app.use("/customer", customer_routes);
-app.use("/", genl_routes);
+app.use("/customer", regd_users);  // Use routes from auth_users.js for handling login
+app.use("/", genl_routes);  // Use general routes (e.g., book listing)
 
-app.listen(PORT,()=>console.log("Server is running"));
+app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
